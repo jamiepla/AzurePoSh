@@ -1,0 +1,8 @@
+$vNetA=Get-AzureRmVirtualNetwork -Name VNENAME -ResourceGroupName RGNAME
+Add-AzureRmVirtualNetworkPeering `
+  -Name 'VNETPeer' `
+  -VirtualNetwork $vNetA `
+  -RemoteVirtualNetworkId "/subscriptions/GUID/resourceGroups/NAME/providers/Microsoft.Network/virtualNetworks/VNETNAME"
+
+  Get-AzureRmVirtualNetworkPeering -ResourceGroupName RGNAME -VirtualNetworkName VNETNAME | Format-Table VirtualNetworkName, PeeringState
+
