@@ -1,0 +1,45 @@
+# Create a subnet and assign the address space of 10.0.0.0/24
+# $subnet = New-AzureRmVirtualNetworkSubnetConfig -Name subnet01 -AddressPrefix 10.0.0.0/24
+
+# Create a virtual network with the address space of 10.0.0.0/16 and add the subnet
+# $vnet = New-AzureRmVirtualNetwork -Name ContosoVNET -ResourceGroupName ContosoRG -Location "East US" -AddressPrefix 10.0.0.0/16 -Subnet $subnet
+
+# Retrieve the newly created subnet
+# $subnet=$vnet.Subnets[0]
+
+# JP - Get the VNET 
+$VNet = Get-AzureRmvirtualNetwork -Name "VNETNAME" -ResourceGroupName "RGNAME"
+# JP - Get the SUBNET for the APP GATEWAY
+$Subnet = Get-AzureRmVirtualNetworkSubnetConfig -Name "APPGWNAME" -VirtualNetwork $VNet 
+# JP - testing 
+# $GatewayIpConfig = New-AzureRmApplicationGatewayIPConfiguration -Name "AppGwSubnet01" -Subnet $Subnet
+
+# Create a public IP address that is used to connect to the application gateway. Application Gateway does not support custom DNS names on public IP addresses.  If a custom name is required for the public endpoint, a CNAME record should be created to point to the automatically generated DNS name for the public IP address.
+$publicip = New-AzureRmPublicIpAddress -ResourceGroupName RGNAME -name APPGW-PIP -location "UK West" -AllocationMethod Dynamic
+
+# Create a gateway IP configuration. The gateway picks up an IP addressfrom the configured subnet and routes network traffic to the IP addresses in the backend IP pool. Keep in mind that each instance takes one IP address.
+$gipconfig = New-AzureRmApplicationGatewayIPConfiguration -Name APPGWIP01 -Subnet $Subnet
+
+# Configure a backend pool with the addresses of your web servers. These backend pool members are all validated to be healthy by probes, whether they are basic probes or custom probes.  Traffic is then routed to them when requests come into the application gateway. Backend pools can be used by multiple rules within the application gateway, which means one backend pool could be used for multiple web applications that reside on the same host.
+$pool = New-AzureRmApplicationGatewayBackendAddressPool -Name APPGWAddresspool01 -BackendIPAddresses 10.201.1.8
+
+# Configure backend http settings to determine the protocol and port that is used when sending traffic to the backend servers. Cookie-based sessions are also determined by the backend HTTP settings.  If enabled, cookie-based session affinity sends traffic to the same backend as previous requests for each packet.
+$poolSetting = New-AzureRmApplicationGatewayBackendHttpSettings -Name "BackEndHTTP" -Port 80 -Protocol Http -CookieBasedAffinity Disabled -RequestTimeout 120
+
+# Configure a frontend port that is used to connect to the application gateway through the public IP address
+$fp = New-AzureRmApplicationGatewayFrontendPort -Name FrontEndHTTP  -Port 80
+
+# Configure the frontend IP configuration with the public IP address created earlier.
+$fipconfig = New-AzureRmApplicationGatewayFrontendIPConfig -Name FrontEndPIP -PublicIPAddress $publicip
+
+# Configure the listener.  The listener is a combination of the front end IP configuration, protocol, and port and is used to receive incoming network traffic. 
+$listener = New-AzureRmApplicationGatewayHttpListener -Name Listener -Protocol Http -FrontendIPConfiguration $fipconfig -FrontendPort $fp
+
+# Configure a basic rule that is used to route traffic to the backend servers. The backend pool settings, listener, and backend pool created in the previous steps make up the rule. Based on the criteria defined traffic is routed to the appropriate backend.
+$rule = New-AzureRmApplicationGatewayRequestRoutingRule -Name MFA -RuleType Basic -BackendHttpSettings $poolSetting -HttpListener $listener -BackendAddressPool $pool
+
+# Configure the SKU for the application gateway, this determines the size and whether or not WAF is used.
+$sku = New-AzureRmApplicationGatewaySku -Name Standard_Small -Tier Standard -Capacity 1
+
+# Create the application gateway
+$appgw = New-AzureRmApplicationGateway -Name APPGWNAME -ResourceGroupName RGNAME -Location "UK West" -BackendAddressPools $pool -BackendHttpSettingsCollection $poolSetting -FrontendIpConfigurations $fipconfig  -GatewayIpConfigurations $gipconfig -FrontendPorts $fp -HttpListeners $listener -RequestRoutingRules $rule -Sku $sku
